@@ -47,7 +47,9 @@ static DNSServer dns;
 static bool netStarted = false;  // mDNS + OTA, started on the first WiFi connection
 static bool apActive = false;    // own hotspot "<hostname>-setup" is running
 static bool clockFromPhone = false;
-static uint32_t lastConnected = 0, lastRetry = 0;
+static uint32_t lastConnected = 0, lastRetry = 0, scanAt = 0, joinStart = 0;
+enum Join : uint8_t { JOIN_NONE, JOIN_BUSY, JOIN_OK, JOIN_BAD_PASS, JOIN_NOT_FOUND, JOIN_FAILED };
+static uint8_t joinState = JOIN_NONE;  // joining a network picked on the hotspot
 static bool dirty = false;
 static uint32_t dirtyAt = 0;
 static uint32_t offAt = 0;      // 0 = no sleep timer
@@ -264,7 +266,7 @@ static String stateJson() {
   }
   j += "\"sched\":" + String(cfg.schedEnabled) + ",\"schedOn\":" + cfg.schedOn + ",\"schedOff\":" + cfg.schedOff +
        ",\"tz\":\"" + cfg.tz + "\",\"time\":\"" + clock + "\",\"clockFromPhone\":" + (clockFromPhone ? "true" : "false") +
-       ",\"online\":" + (online ? "true" : "false") + ",\"ap\":" + (apActive ? "true" : "false") + ",";
+       ",\"online\":" + (online ? "true" : "false") + ",\"ap\":" + (apActive ? "true" : "false") + ",\"join\":" + joinState + ",";
   j += "\"name\":\"" + jsonEscape(cfg.name) + "\",\"hostname\":\"" + cfg.hostname + "\",\"ssid\":\"" +
        jsonEscape(WiFi.SSID().c_str()) + "\",\"restarting\":" + (restartAt ? "true" : "false") + "}";
   return j;
@@ -360,7 +362,15 @@ static void startWebServer() {
   // Nearby WiFi networks – the scan runs asynchronously, the page polls until done.
   server.on("/wifi/scan", HTTP_GET, [] {
     int n = WiFi.scanComplete();
-    if (n == WIFI_SCAN_FAILED) WiFi.scanNetworks(true);
+    // Scanning makes the hotspot hop channels and drop phones – there, reuse a scan for 2 minutes.
+    if (n >= 0 && apActive && millis() - scanAt > 120000) {
+      WiFi.scanDelete();
+      n = WIFI_SCAN_FAILED;
+    }
+    if (n == WIFI_SCAN_FAILED) {
+      WiFi.scanNetworks(true);
+      scanAt = millis();
+    }
     if (n < 0) {
       server.send(200, "application/json", "{\"scanning\":true}");
       return;
@@ -379,7 +389,7 @@ static void startWebServer() {
            ",\"open\":" + (WiFi.encryptionType(i) == ENC_TYPE_NONE ? "true" : "false") + "}";
     }
     j += "]}";
-    WiFi.scanDelete();
+    if (!apActive) WiFi.scanDelete();
     server.send(200, "application/json", j);
   });
   server.on("/wifi/connect", HTTP_POST, [] {
@@ -390,7 +400,15 @@ static void startWebServer() {
       return;
     }
     server.send(200, "text/plain; charset=utf-8", "OK");
-    scheduleRestart();
+    if (apActive) {
+      // Join right away with the hotspot still up, so the page can tell how it went.
+      WiFi.begin(newSsid.c_str(), newPass.c_str());  // also stores the credentials
+      newSsid = newPass = "";
+      joinState = JOIN_BUSY;
+      joinStart = lastRetry = millis();
+    } else {
+      scheduleRestart();
+    }
   });
   // On the hotspot every unknown URL (phones probing for internet) leads to the candle page.
   server.onNotFound([] {
@@ -431,6 +449,8 @@ static void startAp() {
   WiFi.setAutoReconnect(false);
   wifi_station_disconnect();
   lastRetry = millis();
+  WiFi.scanNetworks(true);  // have the network list ready before a phone joins
+  scanAt = millis();
   Serial.printf("Hotspot %s-setup, http://%s\n", cfg.hostname, WiFi.softAPIP().toString().c_str());
 }
 
@@ -448,9 +468,17 @@ static void manageWifi() {
   static uint32_t lastCheck = 0;
   if (millis() - lastCheck < 1000) return;
   lastCheck = millis();
+  const wl_status_t st = WiFi.status();
+  if (joinState == JOIN_BUSY) {
+    const uint32_t t = millis() - joinStart;
+    if (st == WL_CONNECTED) joinState = JOIN_OK;
+    else if (st == WL_WRONG_PASSWORD) joinState = JOIN_BAD_PASS;
+    else if (st == WL_NO_SSID_AVAIL && t > 8000) joinState = JOIN_NOT_FOUND;
+    else if (st == WL_CONNECT_FAILED || t > 25000) joinState = JOIN_FAILED;
+  }
   const bool hasCreds = WiFi.SSID().length() > 0;
   const int phones = apActive ? WiFi.softAPgetStationNum() : 0;
-  if (WiFi.status() == WL_CONNECTED) {
+  if (st == WL_CONNECTED) {
     lastConnected = millis();
     if (!netStarted) startNetworkServices();
     if (apActive && phones == 0) stopAp();
@@ -460,13 +488,14 @@ static void manageWifi() {
     if (!hasCreds || millis() - lastConnected > 20000) startAp();
     return;
   }
-  // On the hotspot: every 2 minutes try the home WiFi for 15 s, but only while no phone is using the hotspot.
+  // On the hotspot: every 2 minutes try the home WiFi for 25 s, but only while no phone is using the hotspot.
   if (!hasCreds) return;
   const uint32_t since = millis() - lastRetry;
   if (phones == 0 && since > 120000) {
     lastRetry = millis();
+    joinState = JOIN_NONE;
     WiFi.begin();
-  } else if (since > 15000 && WiFi.status() != WL_IDLE_STATUS) {
+  } else if ((since > 25000 || joinState > JOIN_OK) && joinState != JOIN_BUSY && st != WL_IDLE_STATUS) {
     wifi_station_disconnect();
   }
 }

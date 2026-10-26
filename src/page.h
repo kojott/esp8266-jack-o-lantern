@@ -121,6 +121,9 @@ $('vb').textContent=Math.round(s.brightness/2.55)+' %';$('vf').textContent=s.fli
 $('tl').textContent=s.timerLeft?'off in '+fmt(s.timerLeft):'';
 $('wcur').textContent=s.online?'Connected to “'+s.ssid+'” · signal '+s.rssi+' dBm':'No WiFi'+(s.ssid?' (“'+s.ssid+'” not reachable)':'')+' – running its own hotspot. Pick a network below.';$('aphint').textContent=s.hostname+'-setup';
 $('info').textContent='IP '+s.ip;
+if(s.ap&&s.join){const n='“'+s.ssid+'”';$('wmsg').textContent=[,'Connecting to '+n+'…',
+'Connected to '+n+'! Switch your phone back to it and open http://'+s.hostname+'.local (IP '+s.ip+'). The hotspot turns off once you leave it.',
+'Wrong password for '+n+'. Pick the network and try again.',n+' is not in range.','Couldn’t connect to '+n+'. Try again.'][s.join]}
 const hm=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
 if(!schedEdit){$('sched').checked=!!s.sched;$('schedOn').value=hm(s.schedOn);$('schedOff').value=hm(s.schedOff);$('tz').value=s.tz}
 $('clock').textContent=s.time?'Pumpkin time: '+s.time+(s.clockFromPhone?' (from your phone)':''):'No time yet – running on the last settings.';
@@ -153,11 +156,12 @@ $('scan').onclick=scan;
 for(const k of['sched','schedOn','schedOff','tz'])$(k).oninput=()=>schedEdit=true;
 $('schedsave').onclick=()=>{const q='sched='+($('sched').checked?1:0)+'&schedOn='+$('schedOn').value+'&schedOff='+$('schedOff').value+'&tz='+encodeURIComponent($('tz').value);
 fetch('/api?'+q).then(r=>r.json()).then(s=>{schedEdit=false;show(s);$('schedmsg').textContent='Saved.';setTimeout(()=>$('schedmsg').textContent='',2000)})};
-$('wgo').onclick=()=>{if(!selSsid)return;if(!confirm('Switch the candle to “'+selSsid+'”?'))return;
+// No confirm() here: the captive-portal browser on phones silently ignores dialogs.
+$('wgo').onclick=()=>{if(!selSsid)return;$('wgo').disabled=true;$('wmsg').textContent='Connecting to “'+selSsid+'”…';
 const b=new URLSearchParams({ssid:selSsid,pass:$('wpass').value});
 fetch('/wifi/connect',{method:'POST',body:b}).then(r=>{if(!r.ok)throw 0;
-$('wmsg').textContent='Switching to “'+selSsid+'”. Join the same network and open http://'+st.hostname+'.local';
-$('wform').hidden=true;$('nets').innerHTML=''}).catch(()=>$('wmsg').textContent='Something went wrong.')};
+if(!st.ap)$('wmsg').textContent='Switching to “'+selSsid+'”. Join the same network and open http://'+st.hostname+'.local';
+$('wform').hidden=true;$('nets').innerHTML=''}).catch(()=>$('wmsg').textContent='Something went wrong.').finally(()=>$('wgo').disabled=false)};
 $('wifi').onclick=()=>{if(confirm('Really forget WiFi? The candle will open the hotspot '+st.hostname+'-setup.'))fetch('/wifireset',{method:'POST'})};
 api('');setInterval(()=>fetch('/api').then(r=>r.json()).then(show).catch(()=>{}),5000);
 </script></body></html>)HTML";
