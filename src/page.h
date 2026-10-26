@@ -64,9 +64,6 @@ small{color:var(--mut)}
 </div>
 
 <div class="card"><details><summary>Advanced</summary>
-<label>Number of LEDs</label><input type="number" id="ledCount" min="1" max="60">
-<label>Data pin (GPIO)</label><select id="pin"><option>2</option><option>4</option><option>5</option><option>12</option><option>13</option><option>14</option></select>
-<p><small id="info"></small></p>
 <h2>Schedule</h2>
 <label class="chk"><input type="checkbox" id="sched"> Turn on and off by the clock</label>
 <div class="two"><div><label>On at</label><input type="time" id="schedOn"></div><div><label>Off at</label><input type="time" id="schedOff"></div></div>
@@ -104,6 +101,11 @@ small{color:var(--mut)}
 <div class="msg" id="wmsg"></div>
 <p><small>If it can't join the new network it opens its own hotspot <b id="aphint"></b> – connect with your phone and pick a WiFi.</small></p>
 <button id="wifi">Forget WiFi</button>
+
+<h2>Hardware</h2>
+<label>Number of LEDs</label><input type="number" id="ledCount" min="1" max="60">
+<label>Data pin (GPIO)</label><select id="pin"><option>2</option><option>4</option><option>5</option><option>12</option><option>13</option><option>14</option></select>
+<p><small id="info"></small></p>
 </details></div>
 </main>
 <script>
