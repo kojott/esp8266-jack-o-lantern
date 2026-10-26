@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1180" font-family="Helvetica, Arial, sans-serif" font-size="14">
+  <rect width="1200" height="1180" fill="#ffffff"/>
+  <text x="600" y="40" text-anchor="middle" font-size="24" font-weight="bold" fill="#222">WiFi Jack-o'-Lantern · wiring</text>
+
+  <!-- wires -->
+  <g fill="none" stroke-width="3" stroke-linejoin="round">
+    <path d="M50 110 H1170 V490 H1040 V520" stroke="#d62728"/>
+    <path d="M220 110 V260" stroke="#d62728"/>
+    <path d="M50 660 H1040 V600" stroke="#222"/>
+    <path d="M220 360 V660" stroke="#222"/>
+    <path d="M640 470 H680 V660" stroke="#222"/>
+    <path d="M290 270 H400" stroke="#ff7f0e"/>
+    <path d="M400 380 H360 V560 H820" stroke="#2ca02c"/>
+  </g>
+
+  <!-- power input -->
+  <circle cx="50" cy="110" r="8" fill="#d62728"/>
+  <circle cx="50" cy="660" r="8" fill="#222"/>
+  <text x="35" y="92" font-weight="bold" fill="#d62728">+5 V</text>
+  <text x="35" y="690" font-weight="bold">GND</text>
+  <text x="62" y="420" fill="#666" transform="rotate(-90 62 420)">5 V input (red / black wire)</text>
+  <text x="560" y="100" fill="#d62728" font-size="12">+5 V → regulator and LED strip</text>
+
+  <!-- AMS1117 -->
+  <rect x="150" y="260" width="140" height="100" rx="8" fill="#1f4e9c"/>
+  <text x="220" y="305" text-anchor="middle" fill="#fff" font-weight="bold">AMS1117</text>
+  <text x="220" y="325" text-anchor="middle" fill="#cfe0ff" font-size="12">3.3 V regulator</text>
+  <text x="228" y="278" fill="#fff" font-size="11">VIN</text>
+  <text x="284" y="290" fill="#fff" font-size="11" text-anchor="end">VOUT</text>
+  <text x="228" y="352" fill="#fff" font-size="11">GND</text>
+  <text x="322" y="262" text-anchor="middle" fill="#ff7f0e" font-weight="bold">3.3 V</text>
+
+  <!-- ESP-12F -->
+  <rect x="400" y="180" width="240" height="320" rx="10" fill="#222"/>
+  <text x="520" y="210" text-anchor="middle" fill="#fff" font-weight="bold" font-size="16">ESP-12F</text>
+  <text x="520" y="228" text-anchor="middle" fill="#aaa" font-size="12">ESP8266</text>
+  <g fill="#ddd" font-size="12">
+    <text x="412" y="244">EN</text>
+    <text x="412" y="274">VCC</text>
+    <text x="412" y="384" fill="#7fd67f" font-weight="bold">GPIO14</text>
+    <text x="628" y="244" text-anchor="end">TX</text>
+    <text x="628" y="274" text-anchor="end">RX</text>
+    <text x="628" y="324" text-anchor="end">GPIO0</text>
+    <text x="628" y="374" text-anchor="end">GPIO2</text>
+    <text x="628" y="424" text-anchor="end">GPIO15</text>
+    <text x="628" y="474" text-anchor="end">GND</text>
+  </g>
+  <!-- straps -->
+  <path d="M400 240 h-18 v30 h18" fill="none" stroke="#ff7f0e" stroke-width="2.5"/>
+  <text x="300" y="232" fill="#ff7f0e" font-size="11">EN → 3.3 V</text>
+  <path d="M640 370 h20" stroke="#ff7f0e" stroke-width="2.5"/>
+  <text x="665" y="374" fill="#ff7f0e" font-size="11">→ 3.3 V</text>
+  <path d="M640 420 h20 v50" fill="none" stroke="#222" stroke-width="2.5"/>
+  <text x="665" y="438" font-size="11">GPIO15 → GND</text>
+
+  <!-- programming header (5 pin, top to bottom) -->
+  <g fill="none" stroke="#888" stroke-width="2" stroke-dasharray="5 3">
+    <path d="M640 240 H740 M640 270 H740"/>
+    <path d="M640 320 H720 V360 H740"/>
+  </g>
+  <rect x="740" y="222" width="76" height="156" rx="4" fill="#444"/>
+  <g fill="#bbb"><circle cx="800" cy="240" r="5"/><circle cx="800" cy="270" r="5"/><circle cx="800" cy="300" r="5"/><circle cx="800" cy="330" r="5"/><circle cx="800" cy="360" r="5"/></g>
+  <rect x="791" y="321" width="18" height="48" rx="5" fill="none" stroke="#ff7f0e" stroke-width="3"/>
+  <text x="778" y="200" text-anchor="middle" fill="#555" font-size="12">5-pin header on the board</text>
+  <text x="778" y="213" text-anchor="middle" fill="#888" font-size="10">(top to bottom)</text>
+  <g fill="#fff" font-size="11"><text x="746" y="244">1 TX</text><text x="746" y="274">2 RX</text><text x="746" y="304">3 GND</text><text x="746" y="334">4 GND</text><text x="746" y="364" fill="#ffb066">5 IO0</text></g>
+
+  <!-- USB-UART adapter wires -->
+  <g fill="none" stroke-width="3">
+    <path d="M800 240 H950" stroke="#1f77b4"/>
+    <path d="M800 270 H950" stroke="#9467bd"/>
+    <path d="M800 300 H930 V350 H950" stroke="#222"/>
+  </g>
+  <text x="828" y="343" fill="#ff7f0e" font-size="11" font-weight="bold">← jumper 4–5</text>
+  <text x="840" y="392" fill="#ff7f0e" font-size="11">GPIO0 to GND only while flashing,</text>
+  <text x="840" y="406" fill="#ff7f0e" font-size="11">then power-cycle the board</text>
+
+  <!-- USB-UART adapter -->
+  <rect x="950" y="215" width="150" height="160" rx="8" fill="#1a1a1a"/>
+  <rect x="1100" y="255" width="50" height="80" rx="3" fill="#b8b8b8"/>
+  <text x="1125" y="300" text-anchor="middle" font-size="11" fill="#333">USB</text>
+  <text x="1025" y="312" text-anchor="middle" font-weight="bold" fill="#fff">USB adapter</text><text x="1025" y="328" text-anchor="middle" fill="#aaa" font-size="11">CH340</text>
+  <g fill="#ddd" font-size="12">
+    <text x="962" y="244">TX</text><text x="962" y="274">RX</text><text x="962" y="354">GND</text>
+  </g>
+  <text x="1035" y="244" fill="#ff7f0e" font-size="12">VCC 3.3 V</text>
+  <path d="M1030 215 V150 H365 V270" fill="none" stroke="#ff7f0e" stroke-width="3" stroke-dasharray="8 5"/>
+  <circle cx="365" cy="270" r="5" fill="#ff7f0e"/>
+  <circle cx="1030" cy="215" r="5" fill="#ff7f0e"/>
+  <text x="700" y="143" text-anchor="middle" fill="#ff7f0e" font-size="12" font-weight="bold">3.3 V from adapter → ESP VCC (only when the 5 V supply is NOT connected)</text>
+  <text x="870" y="232" fill="#1f77b4" font-size="11">TX → TX</text>
+  <text x="870" y="262" fill="#9467bd" font-size="11">RX → RX</text>
+
+  <!-- socket map -->
+  <text x="960" y="420" font-size="12" font-weight="bold" fill="#222">yellow socket (USB at the bottom):</text>
+  <g font-size="11" text-anchor="middle">
+    <rect x="960" y="430" width="200" height="64" rx="4" fill="#ffd84a"/>
+    <g fill="#fff8d0" stroke="#b89a00">
+      <rect x="967" y="436" width="42" height="24" rx="2"/><rect x="1015" y="436" width="42" height="24" rx="2"/><rect x="1063" y="436" width="42" height="24" rx="2"/><rect x="1111" y="436" width="42" height="24" rx="2"/>
+      <rect x="967" y="464" width="42" height="24" rx="2"/><rect x="1015" y="464" width="42" height="24" rx="2"/><rect x="1063" y="464" width="42" height="24" rx="2"/><rect x="1111" y="464" width="42" height="24" rx="2"/>
+    </g>
+    <text x="988" y="452" font-weight="bold" fill="#ff7f0e">VCC</text><text x="1036" y="452" fill="#777">RST</text><text x="1084" y="452" fill="#777">EN</text><text x="1132" y="452" font-weight="bold" fill="#1f77b4">TX</text>
+    <text x="988" y="480" font-weight="bold" fill="#9467bd">RX</text><text x="1036" y="480" fill="#777">GPIO0</text><text x="1084" y="480" fill="#777">GPIO2</text><text x="1132" y="480" font-weight="bold">GND</text>
+  </g>
+  <text x="960" y="507" font-size="10" fill="#666">top row = board edge</text>
+
+  <!-- LED strip -->
+  <rect x="820" y="520" width="240" height="80" rx="6" fill="#111"/>
+  <text x="940" y="625" text-anchor="middle" font-weight="bold" fill="#222">WS2812B · 4 LED</text>
+  <g fill="#fff4dd" stroke="#999">
+    <rect x="840" y="543" width="36" height="36" rx="3"/><rect x="890" y="543" width="36" height="36" rx="3"/>
+    <rect x="940" y="543" width="36" height="36" rx="3"/><rect x="990" y="543" width="36" height="36" rx="3"/>
+  </g>
+  <circle cx="1040" cy="520" r="6" fill="#d62728"/>
+  <circle cx="820" cy="560" r="6" fill="#2ca02c"/>
+  <circle cx="1040" cy="600" r="6" fill="#222"/>
+  <text x="1046" y="512" font-size="11" fill="#d62728">+5V</text>
+  <text x="790" y="552" font-size="11" fill="#2ca02c" font-weight="bold">DI</text>
+  <text x="1048" y="618" font-size="11">GND</text>
+  <text x="480" y="552" fill="#2ca02c" font-weight="bold">data – green wire</text>
+
+  <!-- notes -->
+  <g font-size="13" fill="#333">
+    <text x="50" y="712">Flashing: either a 5 V supply + adapter on TX, RX, GND only – or no supply and power from the adapter (VCC). Never both! LEDs stay dark on 3.3 V.</text>
+    <text x="50" y="732">Tie GPIO0 to GND, then power up / plug in the adapter. If flashing fails, swap TX and RX. All later updates go over WiFi (OTA).</text>
+  </g>
+
+  <!-- adapter pin finder -->
+  <line x1="40" y1="770" x2="1160" y2="770" stroke="#ddd" stroke-width="2"/>
+  <text x="50" y="805" font-size="20" font-weight="bold" fill="#222">Adapter's yellow socket – pinout and how to verify it</text>
+  <g font-size="11" font-weight="bold" text-anchor="middle">
+    <text x="150" y="818" fill="#ff7f0e">VCC</text><text x="246" y="818" fill="#1f77b4">TX</text>
+  </g>
+  <g font-size="11" font-weight="bold">
+    <text x="60" y="866" fill="#9467bd">RX →</text><text x="306" y="866" fill="#222">← GND</text>
+  </g>
+  <rect x="100" y="860" width="200" height="220" rx="6" fill="#1a1a1a"/>
+  <rect x="130" y="822" width="140" height="56" rx="3" fill="#ffd84a"/>
+  <g fill="#b89a00">
+    <rect x="140" y="830" width="20" height="16" fill="#ff7f0e"/><rect x="172" y="830" width="20" height="16"/><rect x="204" y="830" width="20" height="16"/><rect x="236" y="830" width="20" height="16" fill="#1f77b4"/>
+    <rect x="140" y="854" width="20" height="16" fill="#9467bd"/><rect x="172" y="854" width="20" height="16"/><rect x="204" y="854" width="20" height="16"/><rect x="236" y="854" width="20" height="16" fill="#222"/>
+  </g>
+  <circle cx="165" cy="912" r="34" fill="#c9c9c9" stroke="#999"/>
+  <text x="165" y="916" text-anchor="middle" font-size="10" fill="#333">1000µF</text>
+  <rect x="250" y="890" width="30" height="40" fill="#333"/>
+  <rect x="128" y="1000" width="8" height="14" fill="#fff"/><rect x="128" y="946" width="8" height="14" fill="#999"/><rect x="146" y="1000" width="8" height="14" fill="#1f77b4"/><rect x="146" y="946" width="8" height="14" fill="#999"/><rect x="164" y="1000" width="8" height="14" fill="#9467bd"/><rect x="164" y="946" width="8" height="14" fill="#999"/><rect x="182" y="1000" width="8" height="14" fill="#999"/><rect x="182" y="946" width="8" height="14" fill="#999"/><rect x="200" y="1000" width="8" height="14" fill="#999"/><rect x="200" y="946" width="8" height="14" fill="#999"/><rect x="218" y="1000" width="8" height="14" fill="#999"/><rect x="218" y="946" width="8" height="14" fill="#999"/><rect x="236" y="1000" width="8" height="14" fill="#999"/><rect x="236" y="946" width="8" height="14" fill="#999"/><rect x="254" y="1000" width="8" height="14" fill="#999"/><rect x="254" y="946" width="8" height="14" fill="#999"/>
+  <rect x="120" y="960" width="150" height="40" rx="2" fill="#2b2b2b"/>
+  <text x="195" y="985" text-anchor="middle" fill="#aaa" font-size="12">CH340</text>
+  <circle cx="130" cy="991" r="4" fill="#ddd"/>
+  <rect x="150" y="1080" width="100" height="70" rx="3" fill="#b8b8b8"/>
+  <text x="200" y="1120" text-anchor="middle" font-size="12" fill="#333">USB</text>
+  <text x="200" y="1172" text-anchor="middle" font-size="11" fill="#666">top view</text>
+  <g stroke-width="2" fill="none">
+    <path d="M132 1014 V1058 H330" stroke="#222"/>
+    <path d="M150 1014 V1040 H330" stroke="#1f77b4"/>
+    <path d="M168 1014 V1022 H330" stroke="#9467bd"/>
+  </g>
+  <g font-size="13" font-weight="bold">
+    <text x="336" y="1026" fill="#9467bd">pin 3 = RXD</text>
+    <text x="336" y="1044" fill="#1f77b4">pin 2 = TXD</text>
+    <text x="336" y="1062" fill="#222">pin 1 = GND</text>
+  </g>
+  <text x="460" y="1044" font-size="12" fill="#555">Pin 1 = leg next to the dot on the chip (bottom left, closest to USB); pins 2 and 3 are right next to it.</text>
+
+  <g font-size="14" fill="#222">
+    <text x="360" y="835" font-size="13" fill="#333">Tip: many of these adapters have a wire soldered to <tspan font-weight="bold">GPIO0</tspan> on the back (a common flashing mod),</text>
+    <text x="360" y="852" font-size="13" fill="#333">which gives away the orientation: <tspan font-weight="bold">edge row VCC · RST · EN · TX</tspan>, <tspan font-weight="bold">inner row RX · GPIO0 · GPIO2 · GND</tspan>.</text>
+    <text x="360" y="876" font-weight="bold">Check with a multimeter (adapter NOT plugged in):</text>
+    <text x="360" y="900"><tspan font-weight="bold">1.</tspan> <tspan font-weight="bold">GND</tspan> (inner row, right) must beep with <tspan font-weight="bold">pin 1</tspan> of the CH340 chip.</text>
+    <text x="360" y="922"><tspan font-weight="bold" fill="#1f77b4">2.</tspan> <tspan font-weight="bold" fill="#9467bd">RX</tspan> (inner row, left) connects to <tspan font-weight="bold" fill="#1f77b4">pin 2 (TXD)</tspan> → wire to <tspan font-weight="bold">RX</tspan> on your board.</text>
+    <text x="360" y="944"><tspan font-weight="bold" fill="#9467bd">3.</tspan> <tspan font-weight="bold" fill="#1f77b4">TX</tspan> (edge row, right) connects to <tspan font-weight="bold" fill="#9467bd">pin 3 (RXD)</tspan> → wire to <tspan font-weight="bold">TX</tspan> on your board.</text>
+    <text x="378" y="962" font-size="12" fill="#666">(there may be a small series resistor – a few hundred Ω up to 1 kΩ instead of a beep is fine)</text>
+    <text x="360" y="990"><tspan font-weight="bold" fill="#ff7f0e">4.</tspan> Adapter plugged in: <tspan font-weight="bold" fill="#ff7f0e">VCC</tspan> (edge row, left) reads 3.3 V against GND.</text>
+    <text x="360" y="1008" font-size="12" fill="#666">(EN and RST also read 3.3 V through their “103” pull-ups – that's expected)</text>
+  </g>
+</svg>

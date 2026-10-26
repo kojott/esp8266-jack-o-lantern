@@ -1,0 +1,6 @@
+.pio/
+.vscode/
+.DS_Store
+# raw media and the original (Czech) diagram stay local
+photos/
+zapojeni.svg
