@@ -12,6 +12,12 @@
 #include <coredecls.h>
 #include "page.h"
 
+#ifndef FW_VERSION  // normally set by tools/version.py from git
+#define FW_VERSION "dev"
+#define FW_COMMIT "unknown"
+#define FW_BUILT __DATE__ " " __TIME__
+#endif
+
 static const char *OTA_PASSWORD = "candle";  // change me (and upload_flags in platformio.ini)
 static const uint32_t SETTINGS_MAGIC_V1 = 0x53564B31;  // "SVK1" – before name/hostname existed
 static const uint32_t SETTINGS_MAGIC_V2 = 0x53564B32;  // "SVK2" – before the schedule existed
@@ -268,7 +274,8 @@ static String stateJson() {
        ",\"tz\":\"" + cfg.tz + "\",\"time\":\"" + clock + "\",\"clockFromPhone\":" + (clockFromPhone ? "true" : "false") +
        ",\"online\":" + (online ? "true" : "false") + ",\"ap\":" + (apActive ? "true" : "false") + ",\"join\":" + joinState + ",";
   j += "\"name\":\"" + jsonEscape(cfg.name) + "\",\"hostname\":\"" + cfg.hostname + "\",\"ssid\":\"" +
-       jsonEscape(WiFi.SSID().c_str()) + "\",\"restarting\":" + (restartAt ? "true" : "false") + "}";
+       jsonEscape(WiFi.SSID().c_str()) + "\",\"restarting\":" + (restartAt ? "true" : "false") + ",";
+  j += "\"fw\":\"" FW_VERSION "\",\"commit\":\"" FW_COMMIT "\",\"built\":\"" FW_BUILT "\"}";
   return j;
 }
 
@@ -502,7 +509,7 @@ static void manageWifi() {
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("\nJack-o'-Lantern starting");
+  Serial.println("\nJack-o'-Lantern " FW_VERSION " (" FW_COMMIT ", " FW_BUILT ")");
   randomSeed(ESP.getChipId() ^ micros());
 
   loadSettings();

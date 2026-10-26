@@ -31,6 +31,7 @@ button.on,button.pri{background:var(--acc);color:#1b0f00;font-weight:600}
 .sw{display:flex;gap:6px;justify-content:space-between;margin-top:8px}
 .sw i{flex:1;max-width:34px;aspect-ratio:1;border-radius:50%;cursor:pointer;border:2px solid #0003}
 .suf{display:flex;align-items:center;gap:6px}.suf input{flex:1}.suf b{color:var(--mut);font-weight:400}
+.ver{opacity:.6;margin-top:0}
 .nets{margin-top:10px;display:flex;flex-direction:column;gap:6px}
 .nets button{text-align:left;display:flex;justify-content:space-between}
 .nets button.cur{outline:2px solid var(--acc)}
@@ -106,6 +107,7 @@ small{color:var(--mut)}
 <label>Number of LEDs</label><input type="number" id="ledCount" min="1" max="60">
 <label>Data pin (GPIO)</label><select id="pin"><option>2</option><option>4</option><option>5</option><option>12</option><option>13</option><option>14</option></select>
 <p><small id="info"></small></p>
+<p class="ver"><small id="ver"></small></p>
 </details></div>
 </main>
 <script>
@@ -120,7 +122,7 @@ for(const k of['brightness','flicker','speed','mode','ledCount','pin','color','n
 $('vb').textContent=Math.round(s.brightness/2.55)+' %';$('vf').textContent=s.flicker+' %';$('vs').textContent=s.speed+' %';
 $('tl').textContent=s.timerLeft?'off in '+fmt(s.timerLeft):'';
 $('wcur').textContent=s.online?'Connected to “'+s.ssid+'” · signal '+s.rssi+' dBm':'No WiFi'+(s.ssid?' (“'+s.ssid+'” not reachable)':'')+' – running its own hotspot. Pick a network below.';$('aphint').textContent=s.hostname+'-setup';
-$('info').textContent='IP '+s.ip;
+$('info').textContent='IP '+s.ip;$('ver').textContent='Firmware '+s.fw+' · '+s.commit+' · built '+s.built;
 if(s.ap&&s.join){const n='“'+s.ssid+'”';$('wmsg').textContent=[,'Connecting to '+n+'…',
 'Connected to '+n+'! Switch your phone back to it and open http://'+s.hostname+'.local (IP '+s.ip+'). The hotspot turns off once you leave it.',
 'Wrong password for '+n+'. Pick the network and try again.',n+' is not in range.','Couldn’t connect to '+n+'. Try again.'][s.join]}

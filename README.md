@@ -122,6 +122,10 @@ pio run -e ota -t upload                              # default address candle.l
 pio run -e ota -t upload --upload-port jack.local     # a pumpkin you renamed
 ```
 
+Not sure what's running on a pumpkin? The very bottom of *Advanced* shows the firmware version (latest git tag),
+commit and build time – also in `/api` as `fw`, `commit` and `built`. A `+3` after the version means three
+commits past that tag, `-dirty` means it was built with uncommitted changes.
+
 The OTA password is `candle` – change it in `src/main.cpp` **and** `platformio.ini` before you put your pumpkin
 on the porch.
 
@@ -205,6 +209,7 @@ too – anyone standing next to the pumpkin can join it.
 
 ```
 ├── platformio.ini       # build + upload config (serial & OTA)
+├── tools/version.py     # stamps git tag, commit and build time into the firmware
 ├── src/main.cpp         # flame effect, WiFi, web server, OTA
 ├── src/page.h           # the web UI (single HTML page)
 └── docs/                # wiring diagram, photos, GIF
