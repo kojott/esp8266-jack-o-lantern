@@ -5,9 +5,11 @@
 #include <ESP8266mDNS.h>
 #include <ArduinoOTA.h>
 #include <EEPROM.h>
-#include <WiFiManager.h>
+#include <DNSServer.h>
 #include <Adafruit_NeoPixel.h>
 #include <time.h>
+#include <sys/time.h>
+#include <coredecls.h>
 #include "page.h"
 
 static const char *OTA_PASSWORD = "candle";  // change me (and upload_flags in platformio.ini)
@@ -40,9 +42,12 @@ static const Settings DEFAULTS = {SETTINGS_MAGIC, 1, 180, 255, 110, 20, 60, 50, 
 
 static Adafruit_NeoPixel strip(4, 14, NEO_GRB + NEO_KHZ800);
 static ESP8266WebServer server(80);
-static WiFiManager wm;
+static DNSServer dns;
 
-static bool serverStarted = false;
+static bool netStarted = false;  // mDNS + OTA, started on the first WiFi connection
+static bool apActive = false;    // own hotspot "<hostname>-setup" is running
+static bool clockFromPhone = false;
+static uint32_t lastConnected = 0, lastRetry = 0;
 static bool dirty = false;
 static uint32_t dirtyAt = 0;
 static uint32_t offAt = 0;      // 0 = no sleep timer
@@ -96,10 +101,7 @@ static bool validTz(const String &tz) {
   return true;
 }
 
-static void startClock() {
-  configTime(cfg.tz, "pool.ntp.org", "time.google.com");
-  lastMinute = -1;
-}
+static void startClock() { configTime(cfg.tz, "pool.ntp.org", "time.google.com"); }
 
 static bool clockSynced() { return time(nullptr) > 1700000000; }
 
@@ -244,13 +246,14 @@ static void renderFrame() {
 }
 
 static String stateJson() {
+  const bool online = WiFi.status() == WL_CONNECTED;
   char buf[256];
   int32_t left = offAt ? (int32_t)(offAt - millis()) / 1000 : 0;
   snprintf(buf, sizeof(buf),
            "{\"on\":%d,\"brightness\":%d,\"color\":\"#%02x%02x%02x\",\"flicker\":%d,\"speed\":%d,"
            "\"mode\":%d,\"ledCount\":%d,\"pin\":%d,\"timerLeft\":%ld,\"ip\":\"%s\",\"rssi\":%d,",
            cfg.on, cfg.brightness, cfg.r, cfg.g, cfg.b, cfg.flicker, cfg.speed, cfg.mode, cfg.ledCount, cfg.pin,
-           (long)(left > 0 ? left : 0), WiFi.localIP().toString().c_str(), WiFi.RSSI());
+           (long)(left > 0 ? left : 0), (online ? WiFi.localIP() : WiFi.softAPIP()).toString().c_str(), WiFi.RSSI());
   String j(buf);
   char clock[6] = "";
   if (clockSynced()) {
@@ -260,7 +263,8 @@ static String stateJson() {
     snprintf(clock, sizeof(clock), "%02d:%02d", t.tm_hour, t.tm_min);
   }
   j += "\"sched\":" + String(cfg.schedEnabled) + ",\"schedOn\":" + cfg.schedOn + ",\"schedOff\":" + cfg.schedOff +
-       ",\"tz\":\"" + cfg.tz + "\",\"time\":\"" + clock + "\",";
+       ",\"tz\":\"" + cfg.tz + "\",\"time\":\"" + clock + "\",\"clockFromPhone\":" + (clockFromPhone ? "true" : "false") +
+       ",\"online\":" + (online ? "true" : "false") + ",\"ap\":" + (apActive ? "true" : "false") + ",";
   j += "\"name\":\"" + jsonEscape(cfg.name) + "\",\"hostname\":\"" + cfg.hostname + "\",\"ssid\":\"" +
        jsonEscape(WiFi.SSID().c_str()) + "\",\"restarting\":" + (restartAt ? "true" : "false") + "}";
   return j;
@@ -325,7 +329,13 @@ static void handleApi() {
     if (validTz(tz) && tz != cfg.tz) {
       strcpy(cfg.tz, tz.c_str());
       startClock();
+      lastMinute = -1;
     }
+  }
+  // Offline (hotspot) the page hands over the phone's clock; internet time always wins.
+  if (server.hasArg("epoch") && !clockSynced()) {
+    timeval tv = {(time_t)strtoul(server.arg("epoch").c_str(), nullptr, 10), 0};
+    if (tv.tv_sec > 1700000000) settimeofday(&tv, nullptr);
   }
   if (server.hasArg("timer")) {
     int minutes = constrain(server.arg("timer").toInt(), 0, 24 * 60);
@@ -337,13 +347,14 @@ static void handleApi() {
   server.send(200, "application/json", stateJson());
 }
 
-static void startNetworkServices() {
+static void startWebServer() {
   server.on("/", HTTP_GET, [] { server.send_P(200, "text/html; charset=utf-8", PAGE_HTML); });
   server.on("/api", handleApi);
   server.on("/wifireset", HTTP_POST, [] {
     server.send(200, "text/plain; charset=utf-8", "WiFi forgotten, restarting…");
     delay(500);
-    wm.resetSettings();
+    WiFi.persistent(true);
+    WiFi.disconnect(true);  // erases the stored credentials
     ESP.restart();
   });
   // Nearby WiFi networks – the scan runs asynchronously, the page polls until done.
@@ -381,9 +392,19 @@ static void startNetworkServices() {
     server.send(200, "text/plain; charset=utf-8", "OK");
     scheduleRestart();
   });
-  server.onNotFound([] { server.send(404, "text/plain", "404"); });
+  // On the hotspot every unknown URL (phones probing for internet) leads to the candle page.
+  server.onNotFound([] {
+    if (apActive) {
+      server.sendHeader("Location", "http://" + WiFi.softAPIP().toString() + "/");
+      server.send(302, "text/plain", "");
+    } else {
+      server.send(404, "text/plain", "404");
+    }
+  });
   server.begin();
+}
 
+static void startNetworkServices() {
   MDNS.begin(cfg.hostname);
   MDNS.addService("http", "tcp", 80);
 
@@ -395,10 +416,59 @@ static void startNetworkServices() {
   });
   ArduinoOTA.begin();
 
-  startClock();
+  startClock();  // again, in case the boot-time NTP request went nowhere
 
-  serverStarted = true;
+  netStarted = true;
   Serial.printf("Connected: http://%s.local  (%s)\n", cfg.hostname, WiFi.localIP().toString().c_str());
+}
+
+static void startAp() {
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP((String(cfg.hostname) + "-setup").c_str());
+  dns.start(53, "*", WiFi.softAPIP());
+  apActive = true;
+  // A station hunting for a missing router hops channels and kicks phones off the hotspot – stop it, retry later.
+  WiFi.setAutoReconnect(false);
+  wifi_station_disconnect();
+  lastRetry = millis();
+  Serial.printf("Hotspot %s-setup, http://%s\n", cfg.hostname, WiFi.softAPIP().toString().c_str());
+}
+
+static void stopAp() {
+  dns.stop();
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  apActive = false;
+  Serial.println("Hotspot off");
+}
+
+// Home WiFi when it's there, own hotspot when it isn't – the candle is controllable either way.
+static void manageWifi() {
+  static uint32_t lastCheck = 0;
+  if (millis() - lastCheck < 1000) return;
+  lastCheck = millis();
+  const bool hasCreds = WiFi.SSID().length() > 0;
+  const int phones = apActive ? WiFi.softAPgetStationNum() : 0;
+  if (WiFi.status() == WL_CONNECTED) {
+    lastConnected = millis();
+    if (!netStarted) startNetworkServices();
+    if (apActive && phones == 0) stopAp();
+    return;
+  }
+  if (!apActive) {
+    if (!hasCreds || millis() - lastConnected > 20000) startAp();
+    return;
+  }
+  // On the hotspot: every 2 minutes try the home WiFi for 15 s, but only while no phone is using the hotspot.
+  if (!hasCreds) return;
+  const uint32_t since = millis() - lastRetry;
+  if (phones == 0 && since > 120000) {
+    lastRetry = millis();
+    WiFi.begin();
+  } else if (since > 15000 && WiFi.status() != WL_IDLE_STATUS) {
+    wifi_station_disconnect();
+  }
 }
 
 void setup() {
@@ -412,20 +482,21 @@ void setup() {
   if (reset->reason == REASON_DEFAULT_RST || reset->reason == REASON_EXT_SYS_RST) cfg.on = 1;
   applyStripConfig();
 
+  settimeofday_cb([](bool fromSntp) { clockFromPhone = !fromSntp; });
+  startClock();
+
+  WiFi.persistent(true);
   WiFi.mode(WIFI_STA);
   WiFi.hostname(cfg.hostname);
-  wm.setConfigPortalBlocking(false);
-  wm.setHostname(cfg.hostname);
-  // Without a saved (or reachable) WiFi it opens an access point "<hostname>-setup" – join it from a phone and pick your network.
-  wm.autoConnect((String(cfg.hostname) + "-setup").c_str());
+  if (WiFi.SSID().length()) WiFi.begin();  // saved network; without one (or unreachable) manageWifi() opens the hotspot
+  startWebServer();
 }
 
 void loop() {
-  wm.process();
-
-  if (!serverStarted && WiFi.status() == WL_CONNECTED) startNetworkServices();
-  if (serverStarted) {
-    server.handleClient();
+  manageWifi();
+  if (apActive) dns.processNextRequest();
+  server.handleClient();
+  if (netStarted) {
     MDNS.update();
     ArduinoOTA.handle();
   }

@@ -36,6 +36,8 @@ bank, and you can switch it from *cosy candle* to *full-on bonfire* from the sof
   Once the clock syncs it simply follows the next on/off step.
 - 📶 **No hard-coded WiFi** – first boot opens a hotspot, you pick your network on your phone. You can switch
   networks later from the web UI.
+- 🏕️ **Works without WiFi too** – no network in reach (camping, the garden, a party at grandma's)? It runs its own
+  hotspot with the full web UI, and borrows your phone's clock so even the schedule keeps working.
 - 🏷️ **Name it** – every pumpkin gets its own name and address (`jack.local`, `porch.local`, …), so a whole
   pumpkin army can live on one network.
 - 🚀 **Over-the-air updates** – flash once with a cable, then never again.
@@ -126,12 +128,17 @@ on the porch.
 ## 📶 First start
 
 1. Power it up. With no WiFi saved, the pumpkin opens a hotspot called **`candle-setup`**.
-2. Join it from your phone – a setup page pops up. Pick your WiFi, type the password.
+2. Join it from your phone – the candle page pops up. *Advanced → WiFi → Scan networks*, pick yours, type the password.
 3. Back on your home WiFi, open **http://candle.local**. Light it up. 🎃
    (Some Android phones don't do `.local` names – use the pumpkin's IP from your router instead.)
 
 Moved house? *Advanced → WiFi → Scan networks* switches networks from the web UI. If the new network doesn't work
 out, the pumpkin falls back to the `…-setup` hotspot, so you can never lock yourself out.
+
+**No WiFi at all?** That's fine. About 20 seconds after it loses (or never finds) its network, the pumpkin opens
+its hotspot. Join it and you get the very same web UI at **http://192.168.4.1** – it's a pumpkin, not a cloud service.
+Opening the page also hands over your phone's clock, so the schedule works offline too. Every two minutes (only
+while no phone is on the hotspot) it peeks for the home WiFi, and once it's back the hotspot switches itself off.
 
 ## 🤖 HTTP API (a.k.a. Halloween home automation)
 
@@ -173,7 +180,8 @@ All of it lives in `renderFrame()` in [`src/main.cpp`](src/main.cpp), ~40 lines.
 ## ⏰ The schedule, in plain words
 
 - **Power on** (plugged in) → lights up with the last settings. No clock needed.
-- **Clock synced** (NTP, a few seconds after joining WiFi) → it waits for the *next* step: at *On at* it lights,
+- **Clock synced** (NTP a few seconds after joining WiFi, or your phone's clock when you open the page on its
+  hotspot) → it waits for the *next* step: at *On at* it lights,
   at *Off at* it goes out. Overnight ranges like 18:00 → 06:00 work too.
 - **Restarts over WiFi** (updates, renaming) keep whatever state it was in.
 - You can still switch it manually any time – the schedule just takes over again at the next step.
@@ -182,7 +190,8 @@ All of it lives in `renderFrame()` in [`src/main.cpp`](src/main.cpp), ~40 lines.
 
 This is a cosy LAN gadget, not Fort Knox: the web UI has no login, and the OTA password is a compile-time default.
 Change `OTA_PASSWORD` (and `upload_flags`) before deploying, keep it on your home network and never port-forward it
-to the internet. Guests on your WiFi *will* be able to make your pumpkin go disco. 🪩
+to the internet. Guests on your WiFi *will* be able to make your pumpkin go disco. 🪩 The offline hotspot is open,
+too – anyone standing next to the pumpkin can join it.
 
 ## 👻 Lessons learned the spooky way
 

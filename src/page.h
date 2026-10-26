@@ -79,7 +79,7 @@ small{color:var(--mut)}
 <option value="AEST-10AEDT,M10.1.0,M4.1.0/3">Sydney, Melbourne</option>
 </select>
 <p><small id="clock"></small></p>
-<small>Plugging it in always lights it with the last settings. Once it knows the time from the internet, it follows the next on/off step.</small>
+<small>Plugging it in always lights it with the last settings. Once it knows the time – from the internet, or from your phone when you open this page on its hotspot – it follows the next on/off step.</small>
 <div style="margin-top:12px"><button id="schedsave" class="pri">Save schedule</button></div>
 <div class="msg" id="schedmsg"></div>
 
@@ -99,7 +99,7 @@ small{color:var(--mut)}
 <div class="inl"><input type="password" id="wpass" autocomplete="off"><button id="wgo" class="pri">Connect</button></div>
 </div>
 <div class="msg" id="wmsg"></div>
-<p><small>If it can't join the new network it opens its own hotspot <b id="aphint"></b> – connect with your phone and pick a WiFi.</small></p>
+<p><small>Without WiFi it opens its own hotspot <b id="aphint"></b> – join it with your phone and everything here works as usual (at http://192.168.4.1).</small></p>
 <button id="wifi">Forget WiFi</button>
 
 <h2>Hardware</h2>
@@ -109,21 +109,23 @@ small{color:var(--mut)}
 </details></div>
 </main>
 <script>
-const $=id=>document.getElementById(id);let st={},timers={},selSsid='',schedEdit=false;
+const $=id=>document.getElementById(id);let st={},timers={},selSsid='',schedEdit=false,clockSent=0;
 const api=q=>fetch('/api?'+q).then(r=>r.json()).then(show);
 function send(q,delay=0){const k=q.split('=')[0];clearTimeout(timers[k]);timers[k]=setTimeout(()=>api(q),delay)}
 function fmt(s){const m=Math.ceil(s/60);return m>=60?Math.floor(m/60)+' h'+(m%60?' '+m%60+' min':''):m+' min'}
 function show(s){st=s;$('app').className=s.on?'':'off';
-document.title=s.name;$('nm').textContent=s.name;$('hn').textContent=s.hostname+'.local';
+document.title=s.name;$('nm').textContent=s.name;$('hn').textContent=s.online?s.hostname+'.local':'hotspot '+s.hostname+'-setup · '+s.ip;
 $('power').textContent=s.on?'Blow it out':'Light it up';$('power').className='big'+(s.on?' on':'');
 for(const k of['brightness','flicker','speed','mode','ledCount','pin','color','name','hostname']){const el=$(k);if(document.activeElement!==el&&!el.dataset.edit)el.value=s[k]}
 $('vb').textContent=Math.round(s.brightness/2.55)+' %';$('vf').textContent=s.flicker+' %';$('vs').textContent=s.speed+' %';
 $('tl').textContent=s.timerLeft?'off in '+fmt(s.timerLeft):'';
-$('wcur').textContent='Connected to “'+s.ssid+'” · signal '+s.rssi+' dBm';$('aphint').textContent=s.hostname+'-setup';
+$('wcur').textContent=s.online?'Connected to “'+s.ssid+'” · signal '+s.rssi+' dBm':'No WiFi'+(s.ssid?' (“'+s.ssid+'” not reachable)':'')+' – running its own hotspot. Pick a network below.';$('aphint').textContent=s.hostname+'-setup';
 $('info').textContent='IP '+s.ip;
 const hm=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
 if(!schedEdit){$('sched').checked=!!s.sched;$('schedOn').value=hm(s.schedOn);$('schedOff').value=hm(s.schedOff);$('tz').value=s.tz}
-$('clock').textContent=s.time?'Pumpkin time: '+s.time:'No internet time yet – running on the last settings.'}
+$('clock').textContent=s.time?'Pumpkin time: '+s.time+(s.clockFromPhone?' (from your phone)':''):'No time yet – running on the last settings.';
+// No internet time: lend it the phone's clock so the schedule keeps working on the hotspot.
+if(!s.time&&Date.now()-clockSent>10000){clockSent=Date.now();api('epoch='+Math.floor(Date.now()/1000))}}
 $('power').onclick=()=>send('toggle=1');
 for(const k of['brightness','flicker','speed'])$(k).oninput=e=>send(k+'='+e.target.value,80);
 $('color').oninput=e=>send('color='+encodeURIComponent(e.target.value),80);
