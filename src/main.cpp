@@ -257,8 +257,9 @@ static bool spookyRunning() { return spookyAt && (int32_t)(millis() - spookyAt) 
 // never ends in darkness (the fade back would be invisible).
 static void startSpooky(uint32_t atMillis, uint32_t seed, uint32_t lenMs, bool force) {
   if (spookyRunning()) return;  // also swallows the duplicate UDP packet
-  static const uint16_t minLen[SEG_KINDS] = {3000, 1500, 900, 2500, 2000};
-  static const uint16_t extra[SEG_KINDS] = {1500, 1300, 900, 1000, 1000};
+  // Scene lengths in ms: minimum + random extra (heart, tube, dark, eyes, swell).
+  static const uint16_t minLen[SEG_KINDS] = {5000, 2000, 1500, 4000, 3500};
+  static const uint16_t extra[SEG_KINDS] = {2000, 1500, 1500, 2000, 1500};
   segCount = 0;
   uint32_t t = 0;
   uint8_t prev = SEG_KINDS;
@@ -278,7 +279,7 @@ static void startSpooky(uint32_t atMillis, uint32_t seed, uint32_t lenMs, bool f
   Serial.printf("Spooky! seed %u, %u ms\n", seed, lenMs);
 }
 
-static float pulse(float x) { return x < 0 ? 0.0f : expf(-x / 120.0f); }
+static float pulse(float x, float decay) { return x < 0 ? 0.0f : expf(-x / decay); }
 
 // Brightness 0–1 of LED i at t ms into the show; flash = the bright, yellower peak of a swell.
 static float spookyLevel(uint8_t i, uint32_t t, bool &flash) {
@@ -289,22 +290,22 @@ static float spookyLevel(uint8_t i, uint32_t t, bool &flash) {
   const uint32_t ts = t - g.start, seed = spookySeed + s * 977;
   const uint8_t n = cfg.ledCount;
   switch (g.type) {
-    case SEG_HEART: {  // lub-dub … lub-dub
-      const uint32_t period = 700 + hash32(seed, 0, 3) % 300;
+    case SEG_HEART: {  // a slow lub-dub … lub-dub, 40–48 beats a minute
+      const uint32_t period = 1250 + hash32(seed, 0, 3) % 250;
       const float p = ts % period;
-      return constrain(0.05f + 0.85f * pulse(p) + 0.55f * pulse(p - 230), 0.0f, 1.0f);
+      return constrain(0.05f + 0.85f * pulse(p, 200) + 0.55f * pulse(p - 330, 220), 0.0f, 1.0f);
     }
     case SEG_TUBE: {  // a dying fluorescent tube in the cellar
-      if (hashf(seed, ts / 400, 4) < 0.22f) return 0.0f;
-      const float h = hashf(seed, ts / 45, 5);
+      if (hashf(seed, ts / 700, 4) < 0.22f) return 0.0f;
+      const float h = hashf(seed, ts / 90, 5);
       return h < 0.4f ? 0.0f : h < 0.85f ? 1.0f : 0.3f;
     }
     case SEG_DARK:  // pitch black, one ember barely glowing
       return i == hash32(seed, 0, 6) % n ? 0.05f : 0.0f;
     case SEG_EYES: {  // two "eyes" look around, blinking now and then
-      const uint32_t slot = ts / 800;
+      const uint32_t slot = ts / 1600;
       const uint8_t a = hash32(seed, slot, 7) % n, b = n > 1 ? (a + 1 + hash32(seed, slot, 8) % (n - 1)) % n : a;
-      const bool blink = ts % 800 > 680;
+      const bool blink = ts % 1600 > 1380;
       return (i == a || i == b) && !blink ? 1.0f : 0.02f;
     }
     default: {  // SEG_SWELL – slow inhale, a flash, then nothing
