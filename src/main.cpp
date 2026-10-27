@@ -6,6 +6,7 @@
 #include <ArduinoOTA.h>
 #include <EEPROM.h>
 #include <DNSServer.h>
+#include <WiFiUdp.h>
 #include <Adafruit_NeoPixel.h>
 #include <time.h>
 #include <sys/time.h>
@@ -21,7 +22,8 @@
 static const char *OTA_PASSWORD = "candle";  // change me (and upload_flags in platformio.ini)
 static const uint32_t SETTINGS_MAGIC_V1 = 0x53564B31;  // "SVK1" – before name/hostname existed
 static const uint32_t SETTINGS_MAGIC_V2 = 0x53564B32;  // "SVK2" – before the schedule existed
-static const uint32_t SETTINGS_MAGIC = 0x53564B33;     // "SVK3"
+static const uint32_t SETTINGS_MAGIC_V3 = 0x53564B33;  // "SVK3" – before spooky mode existed
+static const uint32_t SETTINGS_MAGIC = 0x53564B34;     // "SVK4"
 static const uint8_t MAX_LEDS = 60;
 
 enum Mode : uint8_t { MODE_CANDLE = 0, MODE_FIRE = 1, MODE_STEADY = 2 };
@@ -41,10 +43,13 @@ struct Settings {
   uint8_t schedEnabled;
   uint16_t schedOn, schedOff;  // minutes after midnight, local time
   char tz[48];                 // POSIX TZ string
+  uint8_t spookyEnabled;
+  uint16_t spookyEvery;  // seconds between spooks
+  uint8_t spookyLen;     // seconds
 };
 
 static Settings cfg;
-static const Settings DEFAULTS = {SETTINGS_MAGIC, 1, 180, 255, 110, 20, 60, 50, MODE_CANDLE, 4, 14, "Candle", "candle", 0, 17 * 60, 22 * 60, "CET-1CEST,M3.5.0,M10.5.0/3"};
+static const Settings DEFAULTS = {SETTINGS_MAGIC, 1, 180, 255, 110, 20, 60, 50, MODE_CANDLE, 4, 14, "Candle", "candle", 0, 17 * 60, 22 * 60, "CET-1CEST,M3.5.0,M10.5.0/3", 0, 60, 20};
 
 static Adafruit_NeoPixel strip(4, 14, NEO_GRB + NEO_KHZ800);
 static ESP8266WebServer server(80);
@@ -143,6 +148,12 @@ static void loadSettings() {
     cfg.schedOn = DEFAULTS.schedOn;
     cfg.schedOff = DEFAULTS.schedOff;
     memcpy(cfg.tz, DEFAULTS.tz, sizeof(cfg.tz));
+    cfg.magic = SETTINGS_MAGIC_V3;
+  }
+  if (cfg.magic == SETTINGS_MAGIC_V3) {
+    cfg.spookyEnabled = DEFAULTS.spookyEnabled;
+    cfg.spookyEvery = DEFAULTS.spookyEvery;
+    cfg.spookyLen = DEFAULTS.spookyLen;
     cfg.magic = SETTINGS_MAGIC;
   }
   cfg.tz[sizeof(cfg.tz) - 1] = 0;
@@ -151,7 +162,8 @@ static void loadSettings() {
   char host[25];
   if (cfg.magic != SETTINGS_MAGIC || !validPin(cfg.pin) || cfg.ledCount == 0 || cfg.ledCount > MAX_LEDS ||
       !sanitizeHostname(cfg.hostname, host) || strcmp(host, cfg.hostname) != 0 || !validTz(cfg.tz) ||
-      cfg.schedOn >= 24 * 60 || cfg.schedOff >= 24 * 60) {
+      cfg.schedOn >= 24 * 60 || cfg.schedOff >= 24 * 60 || cfg.spookyEvery < 30 || cfg.spookyEvery > 3600 ||
+      cfg.spookyLen < 5 || cfg.spookyLen > 60 || cfg.spookyLen >= cfg.spookyEvery) {
     cfg = DEFAULTS;
   }
 }
@@ -206,6 +218,163 @@ static void checkSchedule() {
   }
 }
 
+// ---- Spooky mode: a burst of scary red, identical on every lamp in the network ----
+// Everything below is a pure function of (seed, time since start), never of frame timing,
+// so lamps that start at the same moment with the same seed show exactly the same light.
+static const uint16_t SPOOKY_PORT = 6666;
+static WiFiUDP udp;
+enum Seg : uint8_t { SEG_HEART, SEG_TUBE, SEG_DARK, SEG_EYES, SEG_SWELL, SEG_KINDS };
+struct Segment {
+  uint8_t type;
+  uint32_t start, len;  // ms from the start of the show
+};
+static Segment segs[32];
+static uint8_t segCount = 0;
+static uint32_t spookyAt = 0;  // millis() of the (possibly upcoming) start, 0 = none
+static uint32_t spookyLenMs = 0, spookySeed = 0;
+static bool spookyForce = false;  // "Spooky now!" also lights a lamp that is off
+static uint64_t lastSpookySlot = 0;
+
+static uint64_t nowMs() {
+  timeval tv;
+  gettimeofday(&tv, nullptr);
+  return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
+static uint32_t hash32(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t h = a * 0x9E3779B1u ^ (b + 0x7F4A7C15u) * 0x85EBCA77u ^ (c + 0x165667B1u) * 0xC2B2AE3Du;
+  h ^= h >> 15;
+  h *= 0x2C1B3C6Du;
+  h ^= h >> 12;
+  h *= 0x297A2D39u;
+  return h ^ (h >> 15);
+}
+static float hashf(uint32_t a, uint32_t b, uint32_t c) { return (hash32(a, b, c) & 0xFFFF) / 65535.0f; }
+
+static bool spookyRunning() { return spookyAt && (int32_t)(millis() - spookyAt) < (int32_t)spookyLenMs; }
+
+// Cut the show into scenes: always opens with a dying tube, never two equal scenes in a row,
+// never ends in darkness (the fade back would be invisible).
+static void startSpooky(uint32_t atMillis, uint32_t seed, uint32_t lenMs, bool force) {
+  if (spookyRunning()) return;  // also swallows the duplicate UDP packet
+  static const uint16_t minLen[SEG_KINDS] = {3000, 1500, 900, 2500, 2000};
+  static const uint16_t extra[SEG_KINDS] = {1500, 1300, 900, 1000, 1000};
+  segCount = 0;
+  uint32_t t = 0;
+  uint8_t prev = SEG_KINDS;
+  while (t < lenMs && segCount < 32) {
+    uint8_t type = segCount == 0 ? SEG_TUBE : hash32(seed, segCount, 1) % SEG_KINDS;
+    if (type == prev || (type == SEG_DARK && lenMs - t < 4000)) type = (type + 1 + (type == SEG_DARK)) % SEG_KINDS;
+    if (type == SEG_DARK && prev == SEG_DARK) type = SEG_HEART;
+    uint32_t len = minLen[type] + hashf(seed, segCount, 2) * extra[type];
+    segs[segCount++] = {type, t, len};
+    t += len;
+    prev = type;
+  }
+  spookyAt = atMillis ? atMillis : 1;
+  spookyLenMs = lenMs;
+  spookySeed = seed;
+  spookyForce = force;
+  Serial.printf("Spooky! seed %u, %u ms\n", seed, lenMs);
+}
+
+static float pulse(float x) { return x < 0 ? 0.0f : expf(-x / 120.0f); }
+
+// Brightness 0–1 of LED i at t ms into the show; flash = the bright, yellower peak of a swell.
+static float spookyLevel(uint8_t i, uint32_t t, bool &flash) {
+  flash = false;
+  uint8_t s = 0;
+  while (s + 1 < segCount && t >= segs[s + 1].start) s++;
+  const Segment &g = segs[s];
+  const uint32_t ts = t - g.start, seed = spookySeed + s * 977;
+  const uint8_t n = cfg.ledCount;
+  switch (g.type) {
+    case SEG_HEART: {  // lub-dub … lub-dub
+      const uint32_t period = 700 + hash32(seed, 0, 3) % 300;
+      const float p = ts % period;
+      return constrain(0.05f + 0.85f * pulse(p) + 0.55f * pulse(p - 230), 0.0f, 1.0f);
+    }
+    case SEG_TUBE: {  // a dying fluorescent tube in the cellar
+      if (hashf(seed, ts / 400, 4) < 0.22f) return 0.0f;
+      const float h = hashf(seed, ts / 45, 5);
+      return h < 0.4f ? 0.0f : h < 0.85f ? 1.0f : 0.3f;
+    }
+    case SEG_DARK:  // pitch black, one ember barely glowing
+      return i == hash32(seed, 0, 6) % n ? 0.05f : 0.0f;
+    case SEG_EYES: {  // two "eyes" look around, blinking now and then
+      const uint32_t slot = ts / 800;
+      const uint8_t a = hash32(seed, slot, 7) % n, b = n > 1 ? (a + 1 + hash32(seed, slot, 8) % (n - 1)) % n : a;
+      const bool blink = ts % 800 > 680;
+      return (i == a || i == b) && !blink ? 1.0f : 0.02f;
+    }
+    default: {  // SEG_SWELL – slow inhale, a flash, then nothing
+      const float x = (float)ts / g.len;
+      if (x < 0.85f) return 0.04f + 0.9f * x * x;
+      flash = x < 0.93f;
+      return flash ? 1.0f : 0.0f;
+    }
+  }
+}
+
+static bool applySpookyCfg(uint32_t en, uint32_t every, uint32_t len) {
+  if (every < 30 || every > 3600 || len < 5 || len > 60 || len >= every) return false;
+  if (cfg.spookyEnabled != (en ? 1 : 0) || cfg.spookyEvery != every || cfg.spookyLen != len) {
+    cfg.spookyEnabled = en ? 1 : 0;
+    cfg.spookyEvery = every;
+    cfg.spookyLen = len;
+    markDirty();
+  }
+  return true;
+}
+
+static void broadcast(const char *msg) {
+  if (WiFi.status() != WL_CONNECTED) return;
+  for (int k = 0; k < 2; k++) {  // UDP may lose a packet – send it twice, the copy is ignored
+    udp.beginPacket(WiFi.broadcastIP(), SPOOKY_PORT);
+    udp.write(msg);
+    udp.endPacket();
+  }
+}
+
+// Start in 800 ms on every lamp: enough for the packet to arrive, then all begin at the same instant.
+static void spookyNow() {
+  const uint32_t seed = ESP.random(), len = cfg.spookyLen * 1000UL;
+  char msg[64];
+  uint64_t at = clockSynced() ? nowMs() + 800 : 0;
+  snprintf(msg, sizeof(msg), "JOL1 now %lu %lu %lu %lu", (unsigned long)(at / 1000), (unsigned long)(at % 1000),
+           (unsigned long)seed, (unsigned long)len);
+  broadcast(msg);
+  startSpooky(millis() + 800, seed, len, true);
+}
+
+static void handleUdp() {
+  int n = udp.parsePacket();
+  if (n <= 0) return;
+  char buf[64];
+  n = udp.read(buf, sizeof(buf) - 1);
+  if (n <= 0) return;
+  buf[n] = 0;
+  unsigned long a, b, c, d;
+  if (sscanf(buf, "JOL1 now %lu %lu %lu %lu", &a, &b, &c, &d) == 4 && d >= 1000 && d <= 60000) {
+    int32_t wait = 800;  // no shared clock: start 800 ms after the packet
+    if (a && clockSynced()) wait = constrain((int64_t)((uint64_t)a * 1000 + b) - (int64_t)nowMs(), 0, 3000);
+    startSpooky(millis() + wait, c, d, true);
+  } else if (sscanf(buf, "JOL1 cfg %lu %lu %lu", &a, &b, &c) == 3) {
+    applySpookyCfg(a, b, c);
+  }
+}
+
+// Regular spooks need no messages: every lamp starts at whole multiples of the interval on the wall clock.
+static void checkSpooky() {
+  if (!cfg.spookyEnabled || !clockSynced()) return;
+  const uint64_t now = nowMs(), period = cfg.spookyEvery * 1000ULL, slot = now / period;
+  if (slot == lastSpookySlot) return;
+  lastSpookySlot = slot;
+  const uint32_t into = now - slot * period;
+  if (into > 300 || !cfg.on) return;  // booted mid-way, or the lamp is off: wait for the next one
+  startSpooky(millis() - into, (uint32_t)slot * 2654435761u ^ cfg.spookyEvery, cfg.spookyLen * 1000UL, false);
+}
+
 static void renderFrame() {
   const bool fire = cfg.mode == MODE_FIRE;
   const float intensity = cfg.flicker / 100.0f * (fire ? 1.0f : 0.7f);
@@ -234,6 +403,16 @@ static void renderFrame() {
   }
 
   const float bri = cfg.brightness / 255.0f * master;
+  // Spooky blends in fast and fades back to the normal flame over the last 1.5 s.
+  float spook = 0.0f;
+  if (spookyRunning() && (int32_t)(millis() - spookyAt) >= 0 && (cfg.on || spookyForce)) {
+    const uint32_t t = millis() - spookyAt;
+    spook = min(1.0f, min(t / 150.0f, (spookyLenMs - t) / 1500.0f));
+  } else if (spookyAt && !spookyRunning()) {
+    spookyAt = 0;
+    spookyForce = false;
+  }
+  const float spookBri = max(cfg.brightness, (uint8_t)180) / 255.0f;
   for (uint8_t i = 0; i < cfg.ledCount; i++) {
     Flame &f = flames[i];
     float v = 1.0f;
@@ -248,7 +427,16 @@ static void renderFrame() {
     float gg = cfg.g / 255.0f * powf(v, 1.6f);
     float bb = cfg.b / 255.0f * powf(v, 2.5f);
     auto out = [&](float c) { return (uint8_t)(powf(c * bri, 2.2f) * 255.0f + 0.5f); };
-    strip.setPixelColor(i, out(rr), out(gg), out(bb));
+    uint8_t R = out(rr), G = out(gg), B = out(bb);
+    if (spook > 0.0f) {
+      bool flash;
+      const float lv = spookyLevel(i, millis() - spookyAt, flash) * spookBri;
+      auto mix = [&](uint8_t normal, float c) { return (uint8_t)(normal * (1.0f - spook) + powf(c * lv, 2.2f) * 255.0f * spook + 0.5f); };
+      R = mix(R, 1.0f);
+      G = mix(G, flash ? 0.35f : 0.02f);
+      B = mix(B, flash ? 0.12f : 0.0f);
+    }
+    strip.setPixelColor(i, R, G, B);
   }
   strip.show();
 }
@@ -275,6 +463,8 @@ static String stateJson() {
        ",\"online\":" + (online ? "true" : "false") + ",\"ap\":" + (apActive ? "true" : "false") + ",\"join\":" + joinState + ",";
   j += "\"name\":\"" + jsonEscape(cfg.name) + "\",\"hostname\":\"" + cfg.hostname + "\",\"ssid\":\"" +
        jsonEscape(WiFi.SSID().c_str()) + "\",\"restarting\":" + (restartAt ? "true" : "false") + ",";
+  j += "\"spooky\":" + String(cfg.spookyEnabled) + ",\"spookyEvery\":" + cfg.spookyEvery + ",\"spookyLen\":" + cfg.spookyLen +
+       ",\"spookyActive\":" + (spookyRunning() ? "true" : "false") + ",";
   j += "\"fw\":\"" FW_VERSION "\",\"commit\":\"" FW_COMMIT "\",\"built\":\"" FW_BUILT "\"}";
   return j;
 }
@@ -346,6 +536,17 @@ static void handleApi() {
     timeval tv = {(time_t)strtoul(server.arg("epoch").c_str(), nullptr, 10), 0};
     if (tv.tv_sec > 1700000000) settimeofday(&tv, nullptr);
   }
+  if (server.hasArg("spooky") || server.hasArg("spookyEvery") || server.hasArg("spookyLen")) {
+    const uint32_t en = server.hasArg("spooky") ? server.arg("spooky").toInt() : cfg.spookyEnabled;
+    const uint32_t every = server.hasArg("spookyEvery") ? server.arg("spookyEvery").toInt() : cfg.spookyEvery;
+    const uint32_t len = server.hasArg("spookyLen") ? server.arg("spookyLen").toInt() : cfg.spookyLen;
+    if (applySpookyCfg(en, every, len) && server.hasArg("all")) {
+      char msg[40];
+      snprintf(msg, sizeof(msg), "JOL1 cfg %u %u %u", cfg.spookyEnabled, cfg.spookyEvery, cfg.spookyLen);
+      broadcast(msg);
+    }
+  }
+  if (server.hasArg("spookyNow")) spookyNow();
   if (server.hasArg("timer")) {
     int minutes = constrain(server.arg("timer").toInt(), 0, 24 * 60);
     offAt = minutes > 0 ? millis() + minutes * 60000UL : 0;
@@ -526,6 +727,7 @@ void setup() {
   WiFi.hostname(cfg.hostname);
   if (WiFi.SSID().length()) WiFi.begin();  // saved network; without one (or unreachable) manageWifi() opens the hotspot
   startWebServer();
+  udp.begin(SPOOKY_PORT);
 }
 
 void loop() {
@@ -538,6 +740,8 @@ void loop() {
   }
 
   checkSchedule();
+  checkSpooky();
+  handleUdp();
 
   static uint32_t lastFrame = 0;
   if (millis() - lastFrame >= 16) {

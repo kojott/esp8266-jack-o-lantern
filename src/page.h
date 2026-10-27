@@ -32,6 +32,8 @@ button.on,button.pri{background:var(--acc);color:#1b0f00;font-weight:600}
 .sw i{flex:1;max-width:34px;aspect-ratio:1;border-radius:50%;cursor:pointer;border:2px solid #0003}
 .suf{display:flex;align-items:center;gap:6px}.suf input{flex:1}.suf b{color:var(--mut);font-weight:400}
 .ver{opacity:.6;margin-top:0}
+.spk{margin-top:8px;background:#4a0d0d;color:#ffd0c8}.spk.act{background:#b0121b;color:#fff;animation:sp .12s infinite alternate}
+@keyframes sp{to{opacity:.7}}
 .nets{margin-top:10px;display:flex;flex-direction:column;gap:6px}
 .nets button{text-align:left;display:flex;justify-content:space-between}
 .nets button.cur{outline:2px solid var(--acc)}
@@ -44,6 +46,7 @@ small{color:var(--mut)}
 <header><div class="flame"></div><div><h1 id="nm">Candle</h1><div class="host" id="hn"></div></div></header>
 
 <div class="card"><button id="power" class="big">…</button>
+<button id="spooky" class="big spk">👻 Spooky now!</button>
 <label>Sleep timer <span id="tl"></span></label>
 <div class="row"><button data-t="15">15 min</button><button data-t="30">30 min</button><button data-t="60">1 h</button><button data-t="0">cancel</button></div>
 <div class="inl" style="margin-top:8px"><input type="number" id="tmin" min="1" max="1440" placeholder="custom (minutes)"><button id="tset">Set</button></div>
@@ -84,6 +87,13 @@ small{color:var(--mut)}
 <div style="margin-top:12px"><button id="schedsave" class="pri">Save schedule</button></div>
 <div class="msg" id="schedmsg"></div>
 
+<h2>Spooky</h2>
+<label class="chk"><input type="checkbox" id="spk"> Get spooky regularly</label>
+<div class="two"><div><label>Every (seconds)</label><input type="number" id="spkEvery" min="30" max="3600"></div><div><label>For (seconds)</label><input type="number" id="spkLen" min="5" max="60"></div></div>
+<small>Every lamp in the network spooks at exactly the same moment (they need the time from the internet). Lamps that are off stay off. <i>Spooky now!</i> lights them all.</small>
+<div style="margin-top:12px"><button id="spksave" class="pri">Save for all lamps</button></div>
+<div class="msg" id="spkmsg"></div>
+
 <h2>Device</h2>
 <label>Name</label><input type="text" id="name" maxlength="40">
 <label>Network address</label><div class="suf"><b>http://</b><input type="text" id="hostname" maxlength="24" autocapitalize="off" spellcheck="false"><b>.local</b></div>
@@ -111,7 +121,7 @@ small{color:var(--mut)}
 </details></div>
 </main>
 <script>
-const $=id=>document.getElementById(id);let st={},timers={},selSsid='',schedEdit=false,clockSent=0;
+const $=id=>document.getElementById(id);let st={},timers={},selSsid='',schedEdit=false,spkEdit=false,clockSent=0;
 const api=q=>fetch('/api?'+q).then(r=>r.json()).then(show);
 function send(q,delay=0){const k=q.split('=')[0];clearTimeout(timers[k]);timers[k]=setTimeout(()=>api(q),delay)}
 function fmt(s){const m=Math.ceil(s/60);return m>=60?Math.floor(m/60)+' h'+(m%60?' '+m%60+' min':''):m+' min'}
@@ -122,6 +132,8 @@ for(const k of['brightness','flicker','speed','mode','ledCount','pin','color','n
 $('vb').textContent=Math.round(s.brightness/2.55)+' %';$('vf').textContent=s.flicker+' %';$('vs').textContent=s.speed+' %';
 $('tl').textContent=s.timerLeft?'off in '+fmt(s.timerLeft):'';
 $('wcur').textContent=s.online?'Connected to “'+s.ssid+'” · signal '+s.rssi+' dBm':'No WiFi'+(s.ssid?' (“'+s.ssid+'” not reachable)':'')+' – running its own hotspot. Pick a network below.';$('aphint').textContent=s.hostname+'-setup';
+$('spooky').textContent=s.spookyActive?'👻 Spooking…':'👻 Spooky now!';$('spooky').classList.toggle('act',!!s.spookyActive);
+if(!spkEdit){$('spk').checked=!!s.spooky;$('spkEvery').value=s.spookyEvery;$('spkLen').value=s.spookyLen}
 $('info').textContent='IP '+s.ip;$('ver').textContent='Firmware '+s.fw+' · '+s.commit+' · built '+s.built;
 if(s.ap&&s.join){const n='“'+s.ssid+'”';$('wmsg').textContent=[,'Connecting to '+n+'…',
 'Connected to '+n+'! Switch your phone back to it and open http://'+s.hostname+'.local (IP '+s.ip+'). The hotspot turns off once you leave it.',
@@ -132,6 +144,12 @@ $('clock').textContent=s.time?'Pumpkin time: '+s.time+(s.clockFromPhone?' (from 
 // No internet time: lend it the phone's clock so the schedule keeps working on the hotspot.
 if(!s.time&&Date.now()-clockSent>10000){clockSent=Date.now();api('epoch='+Math.floor(Date.now()/1000))}}
 $('power').onclick=()=>send('toggle=1');
+$('spooky').onclick=()=>{api('spookyNow=1');setTimeout(()=>api(''),1500);setTimeout(()=>api(''),(st.spookyLen+1)*1000)};
+for(const k of['spk','spkEvery','spkLen'])$(k).oninput=()=>spkEdit=true;
+$('spksave').onclick=()=>{const e=parseInt($('spkEvery').value),l=parseInt($('spkLen').value);
+if(!(e>=30&&e<=3600&&l>=5&&l<=60&&l<e)){$('spkmsg').textContent='Every 30–3600 s, for 5–60 s (shorter than the interval).';return}
+fetch('/api?all=1&spooky='+($('spk').checked?1:0)+'&spookyEvery='+e+'&spookyLen='+l).then(r=>r.json()).then(s=>{spkEdit=false;show(s);
+$('spkmsg').textContent='Saved for all lamps.';setTimeout(()=>$('spkmsg').textContent='',2500)})};
 for(const k of['brightness','flicker','speed'])$(k).oninput=e=>send(k+'='+e.target.value,80);
 $('color').oninput=e=>send('color='+encodeURIComponent(e.target.value),80);
 for(const k of['mode','ledCount','pin'])$(k).onchange=e=>send(k+'='+e.target.value);

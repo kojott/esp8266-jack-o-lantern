@@ -28,6 +28,8 @@ bank, and you can switch it from *cosy candle* to *full-on bonfire* from the sof
 - 🕯️ **Realistic candle flicker** – every LED has its own little flame, plus the occasional "draught" that makes
   them all dip together. When the flame dims it also gets redder, just like a real one.
 - 🔥 **Three moods** – *Candle*, *Fire (wilder)* and *Steady light*.
+- 👻 **Spooky mode** – one button and *every* pumpkin on your WiFi goes blood red, heart-beating, flickering and
+  staring at the very same moment. Or let it happen on its own: "every 60 s, for 20 s", then back to cosy.
 - 📱 **Web UI on your phone** – brightness, flicker, speed, colour (incl. warm white & spooky green/purple).
 - ⏲️ **Sleep timer** – 15 min, 30 min, 1 h or any custom value. Goes out by itself with a smooth fade.
 - ⏰ **Set-and-forget schedule** – "on at 17:00, off at 22:00", with internet time and proper time zones/DST.
@@ -166,10 +168,35 @@ curl "http://candle.local/api?timer=120"                    # off in 2 hours
 | `mode` | `0` candle, `1` fire, `2` steady |
 | `color` | `#rrggbb` (URL-encoded `%23rrggbb`) |
 | `timer` | minutes, `0` cancels |
+| `spookyNow` | any – spooks every lamp in the network |
+| `spooky`, `spookyEvery`, `spookyLen`, `all` | `0`/`1`, seconds (30–3600), seconds (5–60), `all=1` = send to every lamp |
 | `sched`, `schedOn`, `schedOff` | `0`/`1`, `HH:MM`, `HH:MM` |
 | `tz` | POSIX time zone, e.g. `CET-1CEST,M3.5.0,M10.5.0/3` |
 | `name`, `hostname` | device name / `hostname`.local (changing the hostname restarts it) |
 | `ledCount`, `pin` | strip length (1–60) / data GPIO (2, 4, 5, 12, 13, 14) |
+
+## 👻 Spooky mode
+
+A spook is a ~20 s show in deep red, cut into scenes: a **dying cellar tube** to open, then a random mix of a
+**heartbeat** (lub-dub…), **pitch darkness** with a single ember, two **eyes** looking around and blinking, and a slow
+**inhale** that ends in a flash. Then it fades back to whatever the pumpkin was doing before – nothing is overwritten.
+
+The trick is that every lamp shows *exactly* the same thing:
+
+- The whole show is a pure function of a **seed** and the **time since start** – no frame-timing randomness – so
+  two lamps with the same seed and start are identical frame by frame.
+- **Regular spooks need no messages at all.** Each lamp has internet time, so they all start at whole multiples of
+  the interval (`:00`, `:01:00`, …) and derive the seed from that slot.
+- **"👻 Spooky now!"** sends a UDP broadcast (port `6666`) with a seed and a start time ~0.8 s in the future, so
+  the packet reaches everyone before the show starts. *Save for all lamps* broadcasts the settings the same way.
+
+Lamps that are off stay off for the regular spooks; *Spooky now!* lights them all (and puts them back to sleep).
+Interval 30–3600 s, length 5–60 s. Without internet time a lamp still spooks on its own button, just not in sync.
+
+```bash
+curl "http://candle.local/api?spookyNow=1"                                   # boo!
+curl "http://candle.local/api?spooky=1&spookyEvery=60&spookyLen=20&all=1"    # every minute, all lamps
+```
 
 ## 🕯️ How the flicker works
 
