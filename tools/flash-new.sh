@@ -27,7 +27,8 @@ port="${PORT:-$(ls /dev/cu.usbserial* /dev/cu.wchusbserial* /dev/ttyUSB* 2>/dev/
 
 bold "🎃 New lamp: \"$name\" → http://$host.local   (adapter $port)"
 echo "   1. Jumper on header pins 4–5 (GPIO0 → GND)"
-echo "   2. Adapter TX/RX/GND connected, board powered from 5 V"
+echo "   2. Adapter TX/RX/GND connected"
+echo "   3. THEN switch the 5 V power on (or off and on again) – the jumper only counts at power-up"
 if [ -t 0 ]; then read -rp "   Ready? Press Enter… "; fi
 
 bold "🔨 Building…"
@@ -35,7 +36,7 @@ LAMP_NAME="$name" LAMP_HOST="$host" "$PIO" run -e serial >/dev/null || die "Buil
 
 bold "⚡ Wiping and flashing (about a minute)…"
 if ! "$PY" "$ESPTOOL" --chip esp8266 --port "$port" --baud 115200 write_flash --erase-all 0x0 .pio/build/serial/firmware.bin; then
-  die "Flashing failed. Check: jumper on 4–5, 5 V power (not the 3.3 V pin of an Uno!), TX↔RX crossed. Then power-cycle the board and try again."
+  die "Flashing failed. Switch the power off and on again with the jumper on, then retry. Also check: 5 V power (not the 3.3 V pin of an Uno!), TX↔RX crossed. Then power-cycle the board and try again."
 fi
 
 bold "✅ Done!"
