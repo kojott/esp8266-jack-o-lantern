@@ -119,14 +119,24 @@ You need [PlatformIO](https://platformio.org) (VS Code extension or CLI). Everyt
 
 ### More pumpkins? One command
 
-Jumper on, adapter plugged in, board powered – then:
+Adapter plugged in, jumper on pins 4–5 **before** you switch the 5 V on (the chip only checks it at power-up – a
+jumper added to a running board does nothing), then:
 
 ```bash
 ./tools/flash-new.sh "Porch pumpkin"     # → hotspot porch-pumpkin-setup, then http://porch-pumpkin.local
+PORT=/dev/cu.usbserial-110 ./tools/flash-new.sh "Attic pumpkin"   # pick the port yourself
 ```
 
 It wipes the chip (old WiFi and settings included), builds the current firmware with that name baked in and flashes
-it. Leave the name out for a plain `candle.local`.
+it. The name is turned into a hostname (`"Dýně 2"` → `dyne-2.local`). Then remove the jumper, power-cycle, join the
+`<name>-setup` hotspot and pick your WiFi under *Advanced → WiFi*.
+
+Give every pumpkin its own name. Leaving it out gives a plain `candle.local`, and two pumpkins called `candle` fight
+over the same address – rename one under *Advanced → Device*.
+
+**"Failed to connect to ESP8266"?** The board isn't in flash mode: check the jumper, switch the power off and on
+again, and rerun the script. (At 74880 baud the boot line says `boot mode:(1,x)` in flash mode and `(3,x)` when it
+runs normally.)
 
 ### Every time after that – over WiFi
 
