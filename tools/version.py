@@ -1,4 +1,5 @@
 # Bakes the firmware version into the build: latest git tag, commit and build time.
+import os
 import subprocess
 from datetime import datetime
 
@@ -27,3 +28,11 @@ env.Append(CPPDEFINES=[
     ("FW_BUILT", env.StringifyMacro(datetime.now().strftime("%Y-%m-%d %H:%M"))),
 ])
 print("Firmware %s (%s)" % (version, commit))
+
+# Default name for a freshly flashed lamp (set by tools/flash-new.sh).
+if os.environ.get("LAMP_NAME") and os.environ.get("LAMP_HOST"):
+    env.Append(CPPDEFINES=[
+        ("LAMP_NAME", env.StringifyMacro(os.environ["LAMP_NAME"])),
+        ("LAMP_HOST", env.StringifyMacro(os.environ["LAMP_HOST"])),
+    ])
+    print("Lamp name %s (%s.local)" % (os.environ["LAMP_NAME"], os.environ["LAMP_HOST"]))

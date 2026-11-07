@@ -117,6 +117,17 @@ You need [PlatformIO](https://platformio.org) (VS Code extension or CLI). Everyt
 
 5. Remove the jumper and power-cycle the board. 🎉
 
+### More pumpkins? One command
+
+Jumper on, adapter plugged in, board powered – then:
+
+```bash
+./tools/flash-new.sh "Porch pumpkin"     # → hotspot porch-pumpkin-setup, then http://porch-pumpkin.local
+```
+
+It wipes the chip (old WiFi and settings included), builds the current firmware with that name baked in and flashes
+it. Leave the name out for a plain `candle.local`.
+
 ### Every time after that – over WiFi
 
 ```bash
@@ -237,6 +248,7 @@ too – anyone standing next to the pumpkin can join it.
 ```
 ├── platformio.ini       # build + upload config (serial & OTA)
 ├── tools/version.py     # stamps git tag, commit and build time into the firmware
+├── tools/flash-new.sh   # one-command flashing of a new lamp
 ├── src/main.cpp         # flame effect, WiFi, web server, OTA
 ├── src/page.h           # the web UI (single HTML page)
 └── docs/                # wiring diagram, photos, GIF

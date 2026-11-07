@@ -19,6 +19,11 @@
 #define FW_BUILT __DATE__ " " __TIME__
 #endif
 
+#ifndef LAMP_NAME  // tools/flash-new.sh can bake in a different default name
+#define LAMP_NAME "Candle"
+#define LAMP_HOST "candle"
+#endif
+
 static const char *OTA_PASSWORD = "candle";  // change me (and upload_flags in platformio.ini)
 static const uint32_t SETTINGS_MAGIC_V1 = 0x53564B31;  // "SVK1" – before name/hostname existed
 static const uint32_t SETTINGS_MAGIC_V2 = 0x53564B32;  // "SVK2" – before the schedule existed
@@ -49,7 +54,7 @@ struct Settings {
 };
 
 static Settings cfg;
-static const Settings DEFAULTS = {SETTINGS_MAGIC, 1, 180, 255, 110, 20, 60, 50, MODE_CANDLE, 4, 14, "Candle", "candle", 0, 17 * 60, 22 * 60, "CET-1CEST,M3.5.0,M10.5.0/3", 0, 60, 20};
+static const Settings DEFAULTS = {SETTINGS_MAGIC, 1, 180, 255, 110, 20, 60, 50, MODE_CANDLE, 4, 14, LAMP_NAME, LAMP_HOST, 0, 17 * 60, 22 * 60, "CET-1CEST,M3.5.0,M10.5.0/3", 0, 60, 20};
 
 static Adafruit_NeoPixel strip(4, 14, NEO_GRB + NEO_KHZ800);
 static ESP8266WebServer server(80);
